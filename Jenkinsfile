@@ -1,49 +1,25 @@
 pipeline {
     agent any
-
-    environment {
-        DEPLOY_DIR = "/Users/naveen/deployed-angular-app/angular"
-    }
-
     stages {
-
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
-                git url: 'file:///Users/naveen/projects/my-angular-app', branch: 'main'
+                checkout scm
             }
         }
-
-        stage('Install Dependencies') {
+        stage('Build') {
             steps {
-                echo "Installing npm dependencies..."
+                echo "Installing dependencies..."
                 sh 'npm install'
+                echo "Building project..."
+                sh 'npm run build'
             }
         }
-
-        stage('Build Angular App') {
+        stage('Deploy (Local Test)') {
             steps {
-                echo "Building Angular app..."
-                sh 'npm run build'   // default output goes to dist/
+                echo "Running local deploy simulation..."
+                sh 'mkdir -p ./local_deploy && cp -r ./dist/* ./local_deploy/'
+                echo "Files deployed to ./local_deploy folder"
             }
-        }
-
-        stage('Deploy') {
-            steps {
-                echo "Deploying to $DEPLOY_DIR ..."
-                sh """
-                rm -rf $DEPLOY_DIR/*
-                cp -r dist/* $DEPLOY_DIR/
-                """
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "✅ Deployment successful!"
-        }
-        failure {
-            echo "❌ Deployment failed!"
         }
     }
 }
