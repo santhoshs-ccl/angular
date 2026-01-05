@@ -27,22 +27,21 @@ pipeline {
             }
         }
 
-        stage('Build') {
-            steps {
-                sh '''
-                    echo "Checking Node & npm versions..."
-                    node -v
-                    npm -v
+	stage('Build') {
+    	steps {
+           sh '''
+           	echo "Checking Node & npm versions..."
+           	/Users/naveen/.nvm/versions/node/v24.12.0/bin/node -v
+            	/Users/naveen/.nvm/versions/node/v24.12.0/bin/npm -v
 
-                    echo "Installing dependencies..."
-                    npm install
+            	echo "Installing dependencies..."
+            	/Users/naveen/.nvm/versions/node/v24.12.0/bin/npm install
 
-                    echo "Building project..."
-                    npm run build
-                '''
-            }
-        }
-
+            	echo "Building project..."
+            	/Users/naveen/.nvm/versions/node/v24.12.0/bin/npm run build
+        '''
+    }
+}
         stage('Deploy to Dev') {
             steps {
                 sh '''
