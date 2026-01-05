@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Make Node & npm visible to Jenkins (macOS fix)
+        // Ensure Node & npm are available
         PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
     }
 
@@ -30,15 +30,62 @@ pipeline {
             }
         }
 
-        stage('Deploy (Local Test)') {
+        stage('Deploy to Dev') {
             steps {
                 sh '''
-                    echo "Running local deploy simulation..."
-                    mkdir -p local_deploy
-                    cp -r dist/* local_deploy/
-                    echo "Files deployed to ./local_deploy folder"
+                    echo "Deploying to Dev environment..."
+                    mkdir -p deploy/dev
+                    cp -r dist/* deploy/dev/
+                    echo "Dev deployment completed"
                 '''
             }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                sh 'echo "Ready for Staging deployment..."'
+            }
+            input {
+                message "Approve Staging Deployment?"
+                ok "Deploy"
+                submitter "qa,admin" // Only QA or Admin can approve
+            }
+            steps {
+                sh '''
+                    echo "Deploying to Staging environment..."
+                    mkdir -p deploy/staging
+                    cp -r dist/* deploy/staging/
+                    echo "Staging deployment completed"
+                '''
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                sh 'echo "Ready for Production deployment..."'
+            }
+            input {
+                message "Approve Production Deployment?"
+                ok "Deploy"
+                submitter "admin" // Only Admin can approve
+            }
+            steps {
+                sh '''
+                    echo "Deploying to Production environment..."
+                    mkdir -p deploy/prod
+                    cp -r dist/* deploy/prod/
+                    echo "Production deployment completed"
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment pipeline completed successfully!"
+        }
+        failure {
+            echo "Deployment pipeline failed!"
         }
     }
 }
