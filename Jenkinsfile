@@ -8,7 +8,7 @@ pipeline {
 
     options {
         // Keep only 10 builds to save disk space
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+        buildDiscarder(logRotator(numToKeepStr: '0'))
     }
 
     stages {
