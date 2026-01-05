@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Ensure Node & npm are available
+        // Ensure Node & npm are available on macOS
         PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
     }
 
@@ -17,7 +17,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
-                    echo "Checking Node & npm..."
+                    echo "Checking Node & npm versions..."
                     node -v
                     npm -v
 
@@ -43,14 +43,8 @@ pipeline {
 
         stage('Deploy to Staging') {
             steps {
-                sh 'echo "Ready for Staging deployment..."'
-            }
-            input {
-                message "Approve Staging Deployment?"
-                ok "Deploy"
-                submitter "qa,admin" // Only QA or Admin can approve
-            }
-            steps {
+                echo "Ready for Staging deployment..."
+                input message: "Approve Staging Deployment?", ok: "Deploy", submitter: "qa,admin"
                 sh '''
                     echo "Deploying to Staging environment..."
                     mkdir -p deploy/staging
@@ -62,14 +56,8 @@ pipeline {
 
         stage('Deploy to Production') {
             steps {
-                sh 'echo "Ready for Production deployment..."'
-            }
-            input {
-                message "Approve Production Deployment?"
-                ok "Deploy"
-                submitter "admin" // Only Admin can approve
-            }
-            steps {
+                echo "Ready for Production deployment..."
+                input message: "Approve Production Deployment?", ok: "Deploy", submitter: "admin"
                 sh '''
                     echo "Deploying to Production environment..."
                     mkdir -p deploy/prod
