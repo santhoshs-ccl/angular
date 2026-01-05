@@ -9,8 +9,6 @@ pipeline {
     options {
         // Keep only 10 builds to save disk space
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Allow ANSI colors in console logs
-        ansiColor('xterm')
     }
 
     stages {
