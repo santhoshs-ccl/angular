@@ -6,11 +6,26 @@ pipeline {
         PATH = "/opt/homebrew/bin:/usr/local/bin:${env.PATH}"
     }
 
+    options {
+        // Keep only 10 builds to save disk space
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Allow ANSI colors in console logs
+        ansiColor('xterm')
+    }
+
     stages {
 
         stage('Checkout') {
             steps {
+                echo "Checking out source code..."
                 checkout scm
+            }
+        }
+
+        stage('Pre-Build Approval') {
+            steps {
+                // Pause build until Admin/QA approve
+                input message: "Approve build to start?", ok: "Start Build", submitter: "qa,admin"
             }
         }
 
@@ -36,7 +51,7 @@ pipeline {
                     echo "Deploying to Dev environment..."
                     mkdir -p deploy/dev
                     cp -r dist/* deploy/dev/
-                    echo "Dev deployment completed"
+                    echo "Dev deployment completed."
                 '''
             }
         }
@@ -49,7 +64,7 @@ pipeline {
                     echo "Deploying to Staging environment..."
                     mkdir -p deploy/staging
                     cp -r dist/* deploy/staging/
-                    echo "Staging deployment completed"
+                    echo "Staging deployment completed."
                 '''
             }
         }
@@ -62,7 +77,7 @@ pipeline {
                     echo "Deploying to Production environment..."
                     mkdir -p deploy/prod
                     cp -r dist/* deploy/prod/
-                    echo "Production deployment completed"
+                    echo "Production deployment completed."
                 '''
             }
         }
@@ -70,10 +85,10 @@ pipeline {
 
     post {
         success {
-            echo "Deployment pipeline completed successfully!"
+            echo "✅ Deployment pipeline completed successfully!"
         }
         failure {
-            echo "Deployment pipeline failed!"
+            echo "❌ Deployment pipeline failed!"
         }
     }
 }
