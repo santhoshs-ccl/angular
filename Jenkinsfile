@@ -9,8 +9,16 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo "Checking out DEV source code..."
+                echo "Checking out PROD source code..."
                 checkout scm
+            }
+        }
+
+        stage('Admin Approval') {
+            steps {
+                input message: "Approve PRODUCTION build & deployment?",
+                      ok: "Approve",
+                      submitter: "admin"
             }
         }
 
@@ -31,13 +39,28 @@ pipeline {
             }
         }
 
-        stage('Deploy to DEV') {
+        stage('Deploy to STAGING') {
             steps {
                 sh '''
-                echo "Deploying to DEV environment..."
-                mkdir -p deploy/dev
-                cp -r dist/* deploy/dev/
-                echo "DEV deployment completed."
+                echo "Deploying to STAGING..."
+                mkdir -p deploy/staging
+                cp -r dist/* deploy/staging/
+                echo "STAGING deployment completed."
+                '''
+            }
+        }
+
+        stage('Deploy to PRODUCTION') {
+            steps {
+                input message: "Final approval for PRODUCTION deployment?",
+                      ok: "Deploy",
+                      submitter: "admin"
+
+                sh '''
+                echo "Deploying to PRODUCTION..."
+                mkdir -p deploy/prod
+                cp -r dist/* deploy/prod/
+                echo "PRODUCTION deployment completed."
                 '''
             }
         }
@@ -45,11 +68,12 @@ pipeline {
 
     post {
         success {
-            echo "✅ DEV pipeline completed successfully!"
+            echo "✅ PRODUCTION deployment completed successfully!"
         }
         failure {
-            echo "❌ DEV pipeline failed!"
+            echo "❌ PRODUCTION pipeline failed!"
         }
     }
 }
+
 
