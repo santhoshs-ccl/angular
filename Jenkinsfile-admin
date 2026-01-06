@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo "Checking out PROD source code..."
+                checkout scm
+            }
+        }
+
+        stage('Admin Approval') {
+            steps {
+                input message: "Approve PRODUCTION build & deployment?",
+                      ok: "Approve",
+                      submitter: "admin"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                set -e
+
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+                node -v
+                npm -v
+
+                npm install
+                npm run build
+                '''
+            }
+        }
+
+        stage('Deploy to STAGING') {
+            steps {
+                sh '''
+                echo "Deploying to STAGING..."
+                mkdir -p deploy/staging
+                cp -r dist/* deploy/staging/
+                echo "STAGING deployment completed."
+                '''
+            }
+        }
+
+        stage('Deploy to PRODUCTION') {
+            steps {
+                input message: "Final approval for PRODUCTION deployment?",
+                      ok: "Deploy",
+                      submitter: "admin"
+
+                sh '''
+                echo "Deploying to PRODUCTION..."
+                mkdir -p deploy/prod
+                cp -r dist/* deploy/prod/
+                echo "PRODUCTION deployment completed."
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ PRODUCTION deployment completed successfully!"
+        }
+        failure {
+            echo "❌ PRODUCTION pipeline failed!"
+        }
+    }
+}
+
