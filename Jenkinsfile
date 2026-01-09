@@ -2,72 +2,69 @@ pipeline {
     agent any
 
     environment {
-        NODE_VERSION = '18.17.1'  // Change this to your required Node version
         NVM_DIR = "${HOME}/.nvm"
+        NODE_VERSION = "18.17.1"
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo 'Checking out code from GitHub...'
-                checkout scm
+                script {
+                    echo "Checking out branch: ${env.BRANCH_NAME}"
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: env.BRANCH_NAME]],
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [[$class: 'CleanBeforeCheckout']],
+                        userRemoteConfigs: [[
+                            url: 'git@github.com:santhoshs-ccl/angular.git',
+                            credentialsId: 'your-ssh-cred-id'
+                        ]]
+                    ])
+                }
             }
         }
 
         stage('Setup Node') {
             steps {
-                script {
-                    echo "Setting up Node version ${NODE_VERSION} using NVM"
-                    sh '''
-                        export NVM_DIR=$HOME/.nvm
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm install ${NODE_VERSION}
-                        nvm use ${NODE_VERSION}
-                        node -v
-                        npm -v
-                    '''
-                }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                    nvm install $NODE_VERSION --lts --no-progress
+                    nvm use $NODE_VERSION
+                    node -v
+                    npm -v
+                '''
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                script {
-                    echo 'Installing npm dependencies...'
-                    sh '''
-                        export NVM_DIR=$HOME/.nvm
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm use ${NODE_VERSION}
-                        npm install
-                    '''
-                }
+                sh 'npm install'
             }
         }
 
         stage('Build') {
             steps {
-                script {
-                    echo 'Building Angular project...'
-                    sh '''
-                        export NVM_DIR=$HOME/.nvm
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm use ${NODE_VERSION}
-                        npm run build
-                    '''
-                }
+                sh 'npm run build -- --output-path=dist'
             }
         }
 
-        stage('Test') {
+        stage('Approval for Production') {
+            when {
+                branch 'main'
+            }
             steps {
                 script {
-                    echo 'Running tests...'
-                    sh '''
-                        export NVM_DIR=$HOME/.nvm
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm use ${NODE_VERSION}
-                        npm test
-                    '''
+                    echo "Waiting for approval to deploy MAIN branch to PROD..."
+                    input message: "Approve deployment to Production?", ok: "Deploy"
                 }
             }
         }
@@ -75,25 +72,30 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    echo 'Deploying application...'
-                    sh '''
-                        # Add your deployment commands here
-                        echo "Deployment stage - implement your deployment logic"
-                    '''
+                    if (env.BRANCH_NAME == 'main') {
+                        echo "Deploying to PROD..."
+                        sh './scripts/deploy-prod.sh'
+                    } else if (env.BRANCH_NAME == 'develop') {
+                        echo "Deploying to UAT..."
+                        sh './scripts/deploy-uat.sh'
+                    } else {
+                        echo "Feature branch, deploying to DEV..."
+                        sh './scripts/deploy-dev.sh'
+                    }
                 }
             }
         }
+
     }
 
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            echo "Build and deployment for branch ${env.BRANCH_NAME} completed successfully."
         }
         failure {
-            echo 'Pipeline failed. Please check the logs.'
+            echo "Build failed for branch ${env.BRANCH_NAME}."
         }
         always {
-            echo 'Cleaning up workspace...'
             cleanWs()
         }
     }
