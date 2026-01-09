@@ -9,16 +9,8 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                echo "Checking out PROD source code..."
+                echo "Checking out source code from ${env.BRANCH_NAME}"
                 checkout scm
-            }
-        }
-
-        stage('Admin Approval') {
-            steps {
-                input message: "Approve PRODUCTION build & deployment?",
-                      ok: "Approve",
-                      submitter: "admin"
             }
         }
 
@@ -26,41 +18,50 @@ pipeline {
             steps {
                 sh '''
                 set -e
-
                 export NVM_DIR="$HOME/.nvm"
                 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
                 node -v
                 npm -v
-
                 npm install
                 npm run build
                 '''
             }
         }
 
-        stage('Deploy to STAGING') {
+        stage('Deploy to DEV') {
+            when {
+                branch 'develop'
+            }
             steps {
                 sh '''
-                echo "Deploying to STAGING..."
-                mkdir -p deploy/staging
-                cp -r dist/* deploy/staging/
-                echo "STAGING deployment completed."
+                echo "Auto deploying to DEV..."
+                mkdir -p deploy/dev
+                cp -r dist/* deploy/dev/
                 '''
             }
         }
 
-        stage('Deploy to PRODUCTION') {
+        stage('Admin Approval for PROD') {
+            when {
+                branch 'main'
+            }
             steps {
-                input message: "Final approval for PRODUCTION deployment?",
-                      ok: "Deploy",
+                input message: "Approve PRODUCTION deployment?",
+                      ok: "Approve",
                       submitter: "admin"
+            }
+        }
 
+        stage('Deploy to PRODUCTION') {
+            when {
+                branch 'main'
+            }
+            steps {
                 sh '''
                 echo "Deploying to PRODUCTION..."
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
-                echo "PRODUCTION deployment completed."
                 '''
             }
         }
@@ -68,12 +69,11 @@ pipeline {
 
     post {
         success {
-            echo "✅ PRODUCTION deployment completed successfully!"
+            echo "✅ Pipeline completed successfully"
         }
         failure {
-            echo "❌ PRODUCTION pipeline failed!"
+            echo "❌ Pipeline failed"
         }
     }
 }
-
 
