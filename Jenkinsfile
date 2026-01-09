@@ -1,13 +1,15 @@
 pipeline {
     agent any
 
+    // Optional: keep last 10 builds
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
     }
 
-    environment {
-        NVM_DIR = "${env.HOME}/.nvm"
+    // Optional parameter for non-multibranch jobs
+    parameters {
+        string(name: 'BRANCH_TO_BUILD', defaultValue: 'dev', description: 'Branch to build & deploy')
     }
 
     stages {
@@ -15,21 +17,37 @@ pipeline {
         stage('Checkout') {
             steps {
                 script {
-                    echo "Checking out branch: ${env.BRANCH_NAME}"
-                    checkout scm
+                    // Detect branch from multibranch or parameter
+                    def branch = env.BRANCH_NAME ?: params.BRANCH_TO_BUILD
+                    echo "Checking out branch: ${branch}"
+
+                    checkout([$class: 'GitSCM',
+                        branches: [[name: "*/${branch}"]],
+                        userRemoteConfigs: [[
+                            url: 'git@github.com:santhoshs-ccl/angular.git',
+                            credentialsId: 'your-ssh-key-id'  // Replace with your Jenkins SSH key credential
+                        ]]
+                    ])
                 }
             }
         }
 
-        stage('Build') {
+        stage('Install Node & Build') {
             steps {
                 sh '''
-                    set -e
-                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                    node -v
-                    npm -v
-                    npm install
-                    npm run build
+                set -e
+
+                # Load NVM
+                export NVM_DIR="$HOME/.nvm"
+                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+                # Check Node & NPM
+                node -v
+                npm -v
+
+                # Install dependencies and build
+                npm install
+                npm run build
                 '''
             }
         }
@@ -37,35 +55,32 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    def branch = env.BRANCH_NAME ?: 'dev'
+                    def branch = env.BRANCH_NAME ?: params.BRANCH_TO_BUILD
 
                     if (branch == 'dev') {
                         echo "Deploying to DEV environment..."
                         sh '''
-                            mkdir -p deploy/dev
-                            cp -r dist/* deploy/dev/
-                            echo "DEV deployment completed."
+                        mkdir -p deploy/dev
+                        cp -r dist/* deploy/dev/
+                        echo "✅ DEV deployment completed."
                         '''
-                    }
-                    else if (branch == 'qa') {
+                    } else if (branch == 'qa') {
                         input message: "Approve QA deployment?", ok: "Deploy", submitter: "admin"
                         echo "Deploying to QA environment..."
                         sh '''
-                            mkdir -p deploy/qa
-                            cp -r dist/* deploy/qa/
-                            echo "QA deployment completed."
+                        mkdir -p deploy/qa
+                        cp -r dist/* deploy/qa/
+                        echo "✅ QA deployment completed."
                         '''
-                    }
-                    else if (branch == 'main') {
-                        input message: "Approve PRODUCTION deployment?", ok: "Deploy", submitter: "admin"
+                    } else if (branch == 'main') {
+                        input message: "Final approval for PRODUCTION deployment?", ok: "Deploy", submitter: "admin"
                         echo "Deploying to PRODUCTION..."
                         sh '''
-                            mkdir -p deploy/prod
-                            cp -r dist/* deploy/prod/
-                            echo "PRODUCTION deployment completed."
+                        mkdir -p deploy/prod
+                        cp -r dist/* deploy/prod/
+                        echo "✅ PRODUCTION deployment completed."
                         '''
-                    }
-                    else {
+                    } else {
                         echo "Branch '${branch}' is not configured for deployment."
                     }
                 }
@@ -75,10 +90,13 @@ pipeline {
 
     post {
         success {
-            echo "✅ Deployment pipeline for branch '${env.BRANCH_NAME}' completed successfully!"
+            echo "🎉 Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Deployment pipeline for branch '${env.BRANCH_NAME}' failed!"
+            echo "❌ Pipeline failed!"
+        }
+        cleanup {
+            cleanWs()
         }
     }
 }
