@@ -5,6 +5,11 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
+    environment {
+        // Ensure BRANCH_NAME is set, fallback to git detection if null
+        BRANCH_NAME = "${env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()}"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -31,7 +36,7 @@ pipeline {
 
         stage('Deploy to DEV') {
             when {
-                branch 'develop'
+                expression { env.BRANCH_NAME == 'develop' }
             }
             steps {
                 sh '''
@@ -44,7 +49,7 @@ pipeline {
 
         stage('Admin Approval for PROD') {
             when {
-                branch 'main'
+                expression { env.BRANCH_NAME == 'main' }
             }
             steps {
                 input message: "Approve PRODUCTION deployment?",
@@ -55,7 +60,7 @@ pipeline {
 
         stage('Deploy to PRODUCTION') {
             when {
-                branch 'main'
+                expression { env.BRANCH_NAME == 'main' }
             }
             steps {
                 sh '''
