@@ -1,99 +1,85 @@
-pipeline {
-    agent any  // Use any available Jenkins node
-
-    environment {
-        PROJECT_NAME = "angular-app"
-        NODE_VERSION = "18" // Change if your project needs another Node version
-    }
+kkpipeline {
+    agent any
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '10')) // Keep last 10 builds
-        timestamps() // Add timestamps to logs
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+    }
+
+    environment {
+        NVM_DIR = "${env.HOME}/.nvm"
     }
 
     stages {
 
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${env.BRANCH_NAME}"]],
-                    doGenerateSubmoduleConfigurations: false,
-                    extensions: [[$class: 'CleanBeforeCheckout']],
-                    userRemoteConfigs: [[
-                        url: 'git@github.com:santhoshs-ccl/angular.git',
-                        credentialsId: 'your-ssh-key-id' // Replace with your Jenkins SSH key ID
-                    ]]
-                ])
+                script {
+                    echo "Checking out branch: ${env.BRANCH_NAME}"
+                    checkout scm
+                }
             }
         }
 
-        stage('Install Node & NPM') {
+        stage('Build') {
             steps {
                 sh '''
-                    echo "Using Node.js version:"
-                    node -v || nvm install $NODE_VERSION
-                    npm install -g @angular/cli
-                    npm ci
+                    set -e
+                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                    node -v
+                    npm -v
+                    npm install
+                    npm run build
                 '''
             }
         }
 
-        stage('Run Lint') {
-            steps {
-                sh 'ng lint'
-            }
-        }
-
-        stage('Build Angular') {
+        stage('Deploy') {
             steps {
                 script {
-                    // Build based on branch
-                    if (env.BRANCH_NAME == 'main') {
-                        sh 'ng build --configuration=production'
-                    } else if (env.BRANCH_NAME == 'dev') {
-                        sh 'ng build --configuration=development'
-                    } else if (env.BRANCH_NAME == 'qa') {
-                        sh 'ng build --configuration=qa'
-                    } else {
-                        sh 'ng build'
+                    def branch = env.BRANCH_NAME ?: 'dev'
+
+                    if (branch == 'dev') {
+                        echo "Deploying to DEV environment..."
+                        sh '''
+                            mkdir -p deploy/dev
+                            cp -r dist/* deploy/dev/
+                            echo "DEV deployment completed."
+                        '''
+                    }
+                    else if (branch == 'qa') {
+                        input message: "Approve QA deployment?", ok: "Deploy", submitter: "admin"
+                        echo "Deploying to QA environment..."
+                        sh '''
+                            mkdir -p deploy/qa
+                            cp -r dist/* deploy/qa/
+                            echo "QA deployment completed."
+                        '''
+                    }
+                    else if (branch == 'main') {
+                        input message: "Approve PRODUCTION deployment?", ok: "Deploy", submitter: "admin"
+                        echo "Deploying to PRODUCTION..."
+                        sh '''
+                            mkdir -p deploy/prod
+                            cp -r dist/* deploy/prod/
+                            echo "PRODUCTION deployment completed."
+                        '''
+                    }
+                    else {
+                        echo "Branch '${branch}' is not configured for deployment."
                     }
                 }
-            }
-        }
-
-        stage('Test Angular') {
-            steps {
-                sh 'npm test -- --watch=false --browsers=ChromeHeadless'
-            }
-        }
-
-        stage('Archive Artifacts') {
-            steps {
-                archiveArtifacts artifacts: 'dist/**', allowEmptyArchive: true
-            }
-        }
-
-        stage('Deploy') {
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'dev'
-                    branch 'qa'
-                }
-            }
-            steps {
-                echo "Deploy steps for branch: ${env.BRANCH_NAME}"
-                // Example: scp, rsync, or kubectl commands
-                // sh "scp -r dist/ user@server:/var/www/${env.BRANCH_NAME}/"
             }
         }
     }
 
     post {
-        success { echo "✅ Build & Deploy successful for ${env.BRANCH_NAME}" }
-        failure { echo "❌ Build failed for ${env.BRANCH_NAME}" }
-        always { cleanWs() } // Clean workspace after build
+        success {
+            echo "✅ Deployment pipeline for branch '${env.BRANCH_NAME}' completed successfully!"
+        }
+        failure {
+            echo "❌ Deployment pipeline for branch '${env.BRANCH_NAME}' failed!"
+        }
     }
 }
 
