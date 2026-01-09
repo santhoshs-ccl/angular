@@ -1,70 +1,58 @@
 pipeline {
     agent any
 
-    options { 
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        skipDefaultCheckout true
-    }
-
     environment {
-        NVM_DIR = "$HOME/.nvm"
+        NODE_VERSION = '24.12.0'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
                 script {
-                    // Detect branch: use env.BRANCH_NAME if multibranch, else fallback to git command
-                    def branchFromGit = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-                    env.DEPLOY_BRANCH = env.BRANCH_NAME ?: branchFromGit
-                    echo "Detected branch: ${env.DEPLOY_BRANCH}"
+                    // Detect the branch name properly
+                    BRANCH_NAME = sh(
+                        script: 'git rev-parse --abbrev-ref HEAD',
+                        returnStdout: true
+                    ).trim()
+                    echo "Detected branch: ${BRANCH_NAME}"
                 }
             }
         }
 
-        stage('Build') {
+        stage('Setup Node') {
             steps {
-                sh '''
-                set -e
-                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                node -v
-                npm -v
-                npm install
-                npm run build
-                '''
+                script {
+                    // Load NVM and use the correct Node version
+                    sh '''
+                        export NVM_DIR="$HOME/.nvm"
+                        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+                        nvm install ${NODE_VERSION}
+                        nvm use ${NODE_VERSION}
+                        node -v
+                        npm -v
+                    '''
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Build & Deploy') {
             steps {
                 script {
-                    if (env.DEPLOY_BRANCH == 'dev') {
-                        echo "Deploying to DEV..."
-                        sh '''
-                        mkdir -p deploy/dev
-                        cp -r dist/* deploy/dev/
-                        echo "DEV deployment completed."
-                        '''
-                    } else if (env.DEPLOY_BRANCH == 'staging') {
-                        input message: "Approve STAGING deployment?", ok: "Deploy", submitter: "team-lead"
-                        echo "Deploying to STAGING..."
-                        sh '''
-                        mkdir -p deploy/staging
-                        cp -r dist/* deploy/staging/
-                        echo "STAGING deployment completed."
-                        '''
-                    } else if (env.DEPLOY_BRANCH == 'main' || env.DEPLOY_BRANCH == 'prod') {
-                        input message: "Final approval for PRODUCTION deployment?", ok: "Deploy", submitter: "admin"
-                        echo "Deploying to PRODUCTION..."
-                        sh '''
-                        mkdir -p deploy/prod
-                        cp -r dist/* deploy/prod/
-                        echo "PRODUCTION deployment completed."
-                        '''
+                    if (BRANCH_NAME == 'main') {
+                        echo "Building and deploying to Production"
+                        sh 'npm install && npm run build:prod'
+                        // Add deploy commands here
+                    } else if (BRANCH_NAME == 'dev') {
+                        echo "Building and deploying to Development"
+                        sh 'npm install && npm run build:dev'
+                        // Add deploy commands here
+                    } else if (BRANCH_NAME == 'qa') {
+                        echo "Building and deploying to QA"
+                        sh 'npm install && npm run build:qa'
+                        // Add deploy commands here
                     } else {
-                        echo "Branch ${env.DEPLOY_BRANCH} is not configured for deployment. Skipping deployment."
+                        echo "Branch not recognized, skipping deploy"
                     }
                 }
             }
@@ -72,11 +60,9 @@ pipeline {
     }
 
     post {
-        success { 
-            echo "✅ Pipeline completed successfully for branch: ${env.DEPLOY_BRANCH}" 
-        }
-        failure { 
-            echo "❌ Pipeline failed for branch: ${env.DEPLOY_BRANCH}" 
+        always {
+            echo "Cleaning workspace"
+            cleanWs()
         }
     }
 }
