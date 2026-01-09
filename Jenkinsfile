@@ -1,83 +1,103 @@
-pipeline {
+kpipeline {
     agent any
 
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
+    environment {
+        // NVM setup
+        NVM_DIR = "${HOME}/.nvm"
+        NODE_VERSION = 'v24.12.0'
+        PATH = "${NVM_DIR}/versions/node/${NODE_VERSION}/bin:${env.PATH}"
     }
 
-    environment {
-        // Ensure BRANCH_NAME is set, fallback to git detection if null
-        BRANCH_NAME = "${env.BRANCH_NAME ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()}"
+    options {
+        skipDefaultCheckout() // we do manual checkout for clarity
+        timestamps()
+        ansiColor('xterm')
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo "Checking out source code from ${env.BRANCH_NAME}"
-                checkout scm
+                echo "Checking out source code..."
+                checkout([$class: 'GitSCM',
+                          branches: [[name: "*/${env.BRANCH_NAME}"]],
+                          userRemoteConfigs: [[url: 'git@github.com:santhoshs-ccl/angular.git']]])
+            }
+        }
+
+        stage('Setup Node') {
+            steps {
+                script {
+                    echo "Setting up Node version ${NODE_VERSION} using NVM"
+                    sh """
+                        export NVM_DIR=${NVM_DIR}
+                        [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+                        nvm install ${NODE_VERSION}
+                        nvm use ${NODE_VERSION}
+                        node -v
+                        npm -v
+                    """
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'npm run test -- --watch=false --browsers=ChromeHeadless'
             }
         }
 
         stage('Build') {
             steps {
-                sh '''
-                set -e
-                export NVM_DIR="$HOME/.nvm"
-                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-                node -v
-                npm -v
-                npm install
-                npm run build
-                '''
+                sh 'npm run build -- --prod'
             }
         }
 
         stage('Deploy to DEV') {
             when {
-                expression { env.BRANCH_NAME == 'develop' }
+                branch 'develop'
             }
             steps {
+                echo "Deploying to DEV environment..."
                 sh '''
-                echo "Auto deploying to DEV..."
-                mkdir -p deploy/dev
-                cp -r dist/* deploy/dev/
+                    mkdir -p deploy/dev
+                    cp -r dist/* deploy/dev/
                 '''
             }
         }
 
-        stage('Admin Approval for PROD') {
+        stage('Deploy to PROD') {
             when {
-                expression { env.BRANCH_NAME == 'main' }
+                branch 'main'
+                beforeInput true
             }
             steps {
-                input message: "Approve PRODUCTION deployment?",
-                      ok: "Approve",
+                input message: "Approve PRODUCTION deployment?", 
+                      ok: "Deploy",
                       submitter: "admin"
-            }
-        }
 
-        stage('Deploy to PRODUCTION') {
-            when {
-                expression { env.BRANCH_NAME == 'main' }
-            }
-            steps {
+                echo "Deploying to PRODUCTION environment..."
                 sh '''
-                echo "Deploying to PRODUCTION..."
-                mkdir -p deploy/prod
-                cp -r dist/* deploy/prod/
+                    mkdir -p deploy/prod
+                    cp -r dist/* deploy/prod/
                 '''
             }
         }
+
     }
 
     post {
         success {
-            echo "✅ Pipeline completed successfully"
+            echo "Pipeline finished successfully!"
         }
         failure {
-            echo "❌ Pipeline failed"
+            echo "Pipeline failed. Please check the logs."
         }
     }
 }
