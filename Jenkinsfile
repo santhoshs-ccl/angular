@@ -1,20 +1,25 @@
 pipeline {
     agent any
 
-    options {
+    options { 
         buildDiscarder(logRotator(numToKeepStr: '10'))
         skipDefaultCheckout true
+    }
+
+    environment {
+        NVM_DIR = "$HOME/.nvm"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
+                checkout scm
                 script {
-                    echo "Checking out source code..."
-                    checkout scm
-                    BRANCH_NAME = env.GIT_BRANCH ?: sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-                    echo "Current branch: ${BRANCH_NAME}"
+                    // Detect branch: use env.BRANCH_NAME if multibranch, else fallback to git command
+                    def branchFromGit = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
+                    env.DEPLOY_BRANCH = env.BRANCH_NAME ?: branchFromGit
+                    echo "Detected branch: ${env.DEPLOY_BRANCH}"
                 }
             }
         }
@@ -23,7 +28,6 @@ pipeline {
             steps {
                 sh '''
                 set -e
-                export NVM_DIR="$HOME/.nvm"
                 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                 node -v
                 npm -v
@@ -36,14 +40,14 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (BRANCH_NAME == 'dev') {
+                    if (env.DEPLOY_BRANCH == 'dev') {
                         echo "Deploying to DEV..."
                         sh '''
                         mkdir -p deploy/dev
                         cp -r dist/* deploy/dev/
                         echo "DEV deployment completed."
                         '''
-                    } else if (BRANCH_NAME == 'staging') {
+                    } else if (env.DEPLOY_BRANCH == 'staging') {
                         input message: "Approve STAGING deployment?", ok: "Deploy", submitter: "team-lead"
                         echo "Deploying to STAGING..."
                         sh '''
@@ -51,7 +55,7 @@ pipeline {
                         cp -r dist/* deploy/staging/
                         echo "STAGING deployment completed."
                         '''
-                    } else if (BRANCH_NAME == 'main' || BRANCH_NAME == 'prod') {
+                    } else if (env.DEPLOY_BRANCH == 'main' || env.DEPLOY_BRANCH == 'prod') {
                         input message: "Final approval for PRODUCTION deployment?", ok: "Deploy", submitter: "admin"
                         echo "Deploying to PRODUCTION..."
                         sh '''
@@ -60,7 +64,7 @@ pipeline {
                         echo "PRODUCTION deployment completed."
                         '''
                     } else {
-                        echo "Branch ${BRANCH_NAME} is not configured for deployment."
+                        echo "Branch ${env.DEPLOY_BRANCH} is not configured for deployment. Skipping deployment."
                     }
                 }
             }
@@ -68,11 +72,11 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Pipeline completed successfully for branch: ${BRANCH_NAME}"
+        success { 
+            echo "✅ Pipeline completed successfully for branch: ${env.DEPLOY_BRANCH}" 
         }
-        failure {
-            echo "❌ Pipeline failed for branch: ${BRANCH_NAME}"
+        failure { 
+            echo "❌ Pipeline failed for branch: ${env.DEPLOY_BRANCH}" 
         }
     }
 }
