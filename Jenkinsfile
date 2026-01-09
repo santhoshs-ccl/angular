@@ -2,26 +2,15 @@ kpipeline {
     agent any
 
     environment {
-        // NVM setup
+        NODE_VERSION = '18.17.1'  // Change this to your required Node version
         NVM_DIR = "${HOME}/.nvm"
-        NODE_VERSION = 'v24.12.0'
-        PATH = "${NVM_DIR}/versions/node/${NODE_VERSION}/bin:${env.PATH}"
-    }
-
-    options {
-        skipDefaultCheckout() // we do manual checkout for clarity
-        timestamps()
-        ansiColor('xterm')
     }
 
     stages {
-
         stage('Checkout') {
             steps {
-                echo "Checking out source code..."
-                checkout([$class: 'GitSCM',
-                          branches: [[name: "*/${env.BRANCH_NAME}"]],
-                          userRemoteConfigs: [[url: 'git@github.com:santhoshs-ccl/angular.git']]])
+                echo 'Checking out code from GitHub...'
+                checkout scm
             }
         }
 
@@ -29,75 +18,83 @@ kpipeline {
             steps {
                 script {
                     echo "Setting up Node version ${NODE_VERSION} using NVM"
-                    sh """
-                        export NVM_DIR=${NVM_DIR}
-                        [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+                    sh '''
+                        export NVM_DIR=$HOME/.nvm
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
                         nvm install ${NODE_VERSION}
                         nvm use ${NODE_VERSION}
                         node -v
                         npm -v
-                    """
+                    '''
                 }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                sh 'npm run test -- --watch=false --browsers=ChromeHeadless'
+                script {
+                    echo 'Installing npm dependencies...'
+                    sh '''
+                        export NVM_DIR=$HOME/.nvm
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        nvm use ${NODE_VERSION}
+                        npm install
+                    '''
+                }
             }
         }
 
         stage('Build') {
             steps {
-                sh 'npm run build -- --prod'
+                script {
+                    echo 'Building Angular project...'
+                    sh '''
+                        export NVM_DIR=$HOME/.nvm
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        nvm use ${NODE_VERSION}
+                        npm run build
+                    '''
+                }
             }
         }
 
-        stage('Deploy to DEV') {
-            when {
-                branch 'develop'
-            }
+        stage('Test') {
             steps {
-                echo "Deploying to DEV environment..."
-                sh '''
-                    mkdir -p deploy/dev
-                    cp -r dist/* deploy/dev/
-                '''
+                script {
+                    echo 'Running tests...'
+                    sh '''
+                        export NVM_DIR=$HOME/.nvm
+                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                        nvm use ${NODE_VERSION}
+                        npm test
+                    '''
+                }
             }
         }
 
-        stage('Deploy to PROD') {
-            when {
-                branch 'main'
-                beforeInput true
-            }
+        stage('Deploy') {
             steps {
-                input message: "Approve PRODUCTION deployment?", 
-                      ok: "Deploy",
-                      submitter: "admin"
-
-                echo "Deploying to PRODUCTION environment..."
-                sh '''
-                    mkdir -p deploy/prod
-                    cp -r dist/* deploy/prod/
-                '''
+                script {
+                    echo 'Deploying application...'
+                    sh '''
+                        # Add your deployment commands here
+                        echo "Deployment stage - implement your deployment logic"
+                    '''
+                }
             }
         }
-
     }
 
     post {
         success {
-            echo "Pipeline finished successfully!"
+            echo 'Pipeline completed successfully!'
         }
         failure {
-            echo "Pipeline failed. Please check the logs."
+            echo 'Pipeline failed. Please check the logs.'
+        }
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs()
         }
     }
 }
