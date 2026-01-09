@@ -1,19 +1,14 @@
 pipeline {
-    agent {
-        docker { 
-            image 'node:18-alpine' 
-            args '-u root:root' // run as root inside container if needed
-        }
-    }
+    agent any  // Use any available Jenkins node
 
     environment {
-        // You can define environment variables here
         PROJECT_NAME = "angular-app"
+        NODE_VERSION = "18" // Change if your project needs another Node version
     }
 
     options {
-        skipDefaultCheckout(true) // We'll checkout manually
-        timestamps()              // Adds timestamps in console log
+        buildDiscarder(logRotator(numToKeepStr: '10')) // Keep last 10 builds
+        timestamps() // Add timestamps to logs
     }
 
     stages {
@@ -27,32 +22,40 @@ pipeline {
                     extensions: [[$class: 'CleanBeforeCheckout']],
                     userRemoteConfigs: [[
                         url: 'git@github.com:santhoshs-ccl/angular.git',
-                        credentialsId: 'your-ssh-key-id'
+                        credentialsId: 'your-ssh-key-id' // Replace with your Jenkins SSH key ID
                     ]]
                 ])
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Install Node & NPM') {
             steps {
-                sh 'npm ci'  // clean install
+                sh '''
+                    echo "Using Node.js version:"
+                    node -v || nvm install $NODE_VERSION
+                    npm install -g @angular/cli
+                    npm ci
+                '''
+            }
+        }
+
+        stage('Run Lint') {
+            steps {
+                sh 'ng lint'
             }
         }
 
         stage('Build Angular') {
             steps {
                 script {
+                    // Build based on branch
                     if (env.BRANCH_NAME == 'main') {
-                        echo "Building production..."
                         sh 'ng build --configuration=production'
                     } else if (env.BRANCH_NAME == 'dev') {
-                        echo "Building development..."
                         sh 'ng build --configuration=development'
                     } else if (env.BRANCH_NAME == 'qa') {
-                        echo "Building QA..."
                         sh 'ng build --configuration=qa'
                     } else {
-                        echo "Unknown branch, using default build..."
                         sh 'ng build'
                     }
                 }
@@ -80,29 +83,17 @@ pipeline {
                 }
             }
             steps {
-                script {
-                    if (env.BRANCH_NAME == 'main') {
-                        echo "Deploying to Production..."
-                        // Add your prod deploy commands here
-                    } else if (env.BRANCH_NAME == 'dev') {
-                        echo "Deploying to Development..."
-                        // Add your dev deploy commands here
-                    } else if (env.BRANCH_NAME == 'qa') {
-                        echo "Deploying to QA..."
-                        // Add your QA deploy commands here
-                    }
-                }
+                echo "Deploy steps for branch: ${env.BRANCH_NAME}"
+                // Example: scp, rsync, or kubectl commands
+                // sh "scp -r dist/ user@server:/var/www/${env.BRANCH_NAME}/"
             }
         }
     }
 
     post {
-        success {
-            echo "Build & Deploy successful for branch ${env.BRANCH_NAME}"
-        }
-        failure {
-            echo "Build failed for branch ${env.BRANCH_NAME}"
-        }
+        success { echo "✅ Build & Deploy successful for ${env.BRANCH_NAME}" }
+        failure { echo "❌ Build failed for ${env.BRANCH_NAME}" }
+        always { cleanWs() } // Clean workspace after build
     }
 }
 
