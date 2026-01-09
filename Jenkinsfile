@@ -1,74 +1,95 @@
 pipeline {
-    agent any
+    agent {
+        docker { 
+            image 'node:18-alpine' 
+            args '-u root:root' // run as root inside container if needed
+        }
+    }
 
     environment {
-        NODE_VERSION = '18.16.0'  // Change to your required Node version
-        NVM_DIR = "${HOME}/.nvm"
+        // You can define environment variables here
+        PROJECT_NAME = "angular-app"
+    }
+
+    options {
+        skipDefaultCheckout(true) // We'll checkout manually
+        timestamps()              // Adds timestamps in console log
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout SCM') {
             steps {
-                checkout scm
-            }
-        }
-
-        stage('Install Node & NPM') {
-            steps {
-                sh '''
-                    # Load NVM
-                    export NVM_DIR="$HOME/.nvm"
-                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-                    # Install and use the required Node version
-                    nvm install ${NODE_VERSION}
-                    nvm use ${NODE_VERSION}
-
-                    # Show versions
-                    node -v
-                    npm -v
-                '''
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${env.BRANCH_NAME}"]],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [[$class: 'CleanBeforeCheckout']],
+                    userRemoteConfigs: [[
+                        url: 'git@github.com:santhoshs-ccl/angular.git',
+                        credentialsId: 'your-ssh-key-id'
+                    ]]
+                ])
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh 'npm ci'  // clean install
             }
         }
 
-        stage('Build') {
+        stage('Build Angular') {
             steps {
                 script {
-                    // Branch-based build
                     if (env.BRANCH_NAME == 'main') {
+                        echo "Building production..."
                         sh 'ng build --configuration=production'
                     } else if (env.BRANCH_NAME == 'dev') {
+                        echo "Building development..."
                         sh 'ng build --configuration=development'
                     } else if (env.BRANCH_NAME == 'qa') {
+                        echo "Building QA..."
                         sh 'ng build --configuration=qa'
                     } else {
+                        echo "Unknown branch, using default build..."
                         sh 'ng build'
                     }
                 }
             }
         }
 
+        stage('Test Angular') {
+            steps {
+                sh 'npm test -- --watch=false --browsers=ChromeHeadless'
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'dist/**', allowEmptyArchive: true
+            }
+        }
+
         stage('Deploy') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    branch 'qa'
+                }
+            }
             steps {
                 script {
-                    // Branch-based deployment logic
                     if (env.BRANCH_NAME == 'main') {
                         echo "Deploying to Production..."
-                        sh './deploy-prod.sh'
+                        // Add your prod deploy commands here
                     } else if (env.BRANCH_NAME == 'dev') {
-                        echo "Deploying to Dev..."
-                        sh './deploy-dev.sh'
+                        echo "Deploying to Development..."
+                        // Add your dev deploy commands here
                     } else if (env.BRANCH_NAME == 'qa') {
                         echo "Deploying to QA..."
-                        sh './deploy-qa.sh'
-                    } else {
-                        echo "No deployment for this branch."
+                        // Add your QA deploy commands here
                     }
                 }
             }
@@ -77,10 +98,10 @@ pipeline {
 
     post {
         success {
-            echo "Build & Deployment succeeded for branch ${env.BRANCH_NAME}!"
+            echo "Build & Deploy successful for branch ${env.BRANCH_NAME}"
         }
         failure {
-            echo "Build or Deployment failed for branch ${env.BRANCH_NAME}."
+            echo "Build failed for branch ${env.BRANCH_NAME}"
         }
     }
 }
