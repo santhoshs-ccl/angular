@@ -54,23 +54,24 @@ pipeline {
             }
         }
 
-        stage('Deploy - MAIN (PRODUCTION)') {
-            when {
-                expression { env.BRANCH_NAME == 'main' }
-            }
-            steps {
-                // Input approval for main
-                input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                      ok: "Approve & Deploy",
-
-                echo "🚀 Deploying PRODUCTION"
-                sh '''
-                mkdir -p deploy/prod
-                cp -r dist/* deploy/prod/
-                '''
-            }
-        }
+stage('Deploy - MAIN (PRODUCTION)') {
+    when {
+        expression { env.BRANCH_NAME == 'main' }
     }
+    steps {
+        script {
+            // Input approval for main branch
+            input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
+                  ok: "Approve & Deploy"
+        }
+
+        echo "🚀 Deploying PRODUCTION"
+        sh '''
+        mkdir -p deploy/prod
+        cp -r dist/* deploy/prod/
+        '''
+    }
+}
 
     post {
         success {
