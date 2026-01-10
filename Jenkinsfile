@@ -52,10 +52,12 @@ pipeline {
                 expression { env.BRANCH_NAME == 'main' }
             }
             steps {
-                script {
-                    input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                          ok: "Approve & Deploy"
-                }
+                // Input approval
+                input(
+                    message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
+                    ok: "Approve & Deploy"
+                    // submitter: "admin,qa" // uncomment after confirming Jenkins user IDs
+                )
 
                 echo "🚀 Deploying PRODUCTION"
                 sh '''
@@ -65,7 +67,7 @@ pipeline {
             }
         }
 
-    } // <-- closes stages
+    } // stages
 
     post {
         success {
@@ -75,5 +77,5 @@ pipeline {
             echo "❌ Pipeline failed"
         }
     }
-} // <-- closes pipeline
+} // pipeline
 
