@@ -2,30 +2,22 @@ pipeline {
     agent any
 
     options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo "Checking out branch: ${env.BRANCH_NAME}"
+                echo "Branch detected: ${env.BRANCH_NAME}"
                 checkout scm
             }
         }
 
-        stage('Install Dependencies & Build') {
+        stage('Build') {
             steps {
                 sh '''
-                set -e
-
-                export NVM_DIR="$HOME/.nvm"
-                [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-                node -v
-                npm -v
-
                 npm install
                 npm run build
                 '''
@@ -34,32 +26,30 @@ pipeline {
 
         stage('Deploy - DEVELOP') {
             when {
-                branch 'develop'
+                expression { env.BRANCH_NAME == 'develop' }
             }
             steps {
-                echo "🚀 Deploying DEVELOP (No Approval Required)"
+                echo "🚀 Deploying DEVELOP (No approval)"
                 sh '''
                 mkdir -p deploy/dev
                 cp -r dist/* deploy/dev/
-                echo "✅ DEVELOP deployment completed"
                 '''
             }
         }
 
-        stage('Deploy - MAIN (Production)') {
+        stage('Deploy - MAIN (PRODUCTION)') {
             when {
-                branch 'main'
+                expression { env.BRANCH_NAME == 'main' }
             }
             steps {
-                input message: "Approve PRODUCTION deployment?",
-                      ok: "Deploy",
+                input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
+                      ok: "Approve & Deploy",
                       submitter: "admin"
 
                 echo "🚀 Deploying PRODUCTION"
                 sh '''
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
-                echo "✅ PRODUCTION deployment completed"
                 '''
             }
         }
@@ -67,13 +57,10 @@ pipeline {
 
     post {
         success {
-            echo "🎉 Pipeline completed successfully!"
+            echo "✅ Pipeline completed successfully"
         }
         failure {
-            echo "❌ Pipeline failed!"
-        }
-        cleanup {
-            cleanWs()
+            echo "❌ Pipeline failed"
         }
     }
 }
