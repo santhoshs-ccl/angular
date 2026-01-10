@@ -4,13 +4,14 @@ pipeline {
     options {
         timestamps()
         buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo "Branch detected: ${env.BRANCH_NAME}"
+                echo "📌 Branch detected: ${env.BRANCH_NAME}"
                 checkout scm
             }
         }
@@ -18,6 +19,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
+                set -e
                 npm install
                 npm run build
                 '''
@@ -26,30 +28,34 @@ pipeline {
 
         stage('Deploy - DEVELOP') {
             when {
-                expression { env.BRANCH_NAME == 'develop' }
+                branch 'develop'
             }
             steps {
-                echo "🚀 Deploying DEVELOP (No approval)"
+                echo "🚀 Deploying DEVELOP (No approval required)"
                 sh '''
                 mkdir -p deploy/dev
                 cp -r dist/* deploy/dev/
+                echo "✅ DEVELOP deployment completed"
                 '''
             }
         }
 
         stage('Deploy - MAIN (PRODUCTION)') {
             when {
-                expression { env.BRANCH_NAME == 'main' }
+                beforeInput true
+                branch 'main'
+            }
+            input {
+                message "⚠️ Approve PRODUCTION deployment from MAIN branch?"
+                ok "Approve & Deploy"
+                submitter "admin"
             }
             steps {
-                input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                      ok: "Approve & Deploy",
-                      submitter: "admin"
-
                 echo "🚀 Deploying PRODUCTION"
                 sh '''
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
+                echo "✅ PRODUCTION deployment completed"
                 '''
             }
         }
@@ -57,10 +63,13 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline completed successfully"
+            echo "🎉 Pipeline completed successfully"
         }
         failure {
             echo "❌ Pipeline failed"
+        }
+        cleanup {
+            cleanWs()
         }
     }
 }
