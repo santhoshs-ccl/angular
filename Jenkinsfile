@@ -62,7 +62,7 @@ pipeline {
                 // Input approval for main
                 input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
                       ok: "Approve & Deploy",
-                      submitter: "Santhosh S,qa"   // users allowed to approve
+                      submitter: "Santhosh S,qa,admin"   // users allowed to approve
 
                 echo "🚀 Deploying PRODUCTION"
                 sh '''
