@@ -7,7 +7,6 @@ pipeline {
     }
 
     environment {
-        // Use NVM directory
         NVM_DIR = "${HOME}/.nvm"
     }
 
@@ -24,17 +23,11 @@ pipeline {
             steps {
                 sh '''
                 set -e
-                # Load NVM
                 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-                # Use supported Node version
                 nvm install 18
                 nvm use 18
-
                 echo "Node version: $(node -v)"
                 echo "NPM version: $(npm -v)"
-
-                # Install dependencies and build
                 npm install
                 npm run build
                 '''
@@ -54,24 +47,25 @@ pipeline {
             }
         }
 
-stage('Deploy - MAIN (PRODUCTION)') {
-    when {
-        expression { env.BRANCH_NAME == 'main' }
-    }
-    steps {
-        script {
-            // Input approval for main branch
-            input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                  ok: "Approve & Deploy"
+        stage('Deploy - MAIN (PRODUCTION)') {
+            when {
+                expression { env.BRANCH_NAME == 'main' }
+            }
+            steps {
+                script {
+                    input message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
+                          ok: "Approve & Deploy"
+                }
+
+                echo "🚀 Deploying PRODUCTION"
+                sh '''
+                mkdir -p deploy/prod
+                cp -r dist/* deploy/prod/
+                '''
+            }
         }
 
-        echo "🚀 Deploying PRODUCTION"
-        sh '''
-        mkdir -p deploy/prod
-        cp -r dist/* deploy/prod/
-        '''
-    }
-}
+    } // <-- closes stages
 
     post {
         success {
@@ -81,5 +75,5 @@ stage('Deploy - MAIN (PRODUCTION)') {
             echo "❌ Pipeline failed"
         }
     }
-}
+} // <-- closes pipeline
 
