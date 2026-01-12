@@ -52,15 +52,14 @@ pipeline {
                 expression { env.BRANCH_NAME == 'main' }
             }
             steps {
-                // Input approval
                 input(
                     message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                    ok: "Approve & Deploy"
-                    submitter: "admin,qa" // uncomment after confirming Jenkins user IDs
-		    submitterParameter: "APPROVED_BY"
+                    ok: "Approve & Deploy",
+                    submitter: "admin,qa",
+                    submitterParameter: "APPROVED_BY"
                 )
 
-                echo "🚀 Deploying PRODUCTION"
+                echo "🚀 Deploying PRODUCTION (Approved by: ${APPROVED_BY})"
                 sh '''
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
@@ -78,5 +77,5 @@ pipeline {
             echo "❌ Pipeline failed"
         }
     }
-} // pipeline
+}
 
