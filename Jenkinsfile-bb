@@ -19,25 +19,6 @@ pipeline {
             }
         }
 
-        /* =======================
-           PRE-BUILD APPROVAL
-           ======================= */
-        stage('PROD Approval') {
-            when {
-                expression { env.BRANCH_NAME == 'main' }
-            }
-            steps {
-                input(
-                    message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
-                    ok: "Approve & Continue",
-                    submitter: "admin,qa",
-                    submitterParameter: "APPROVED_BY"
-                )
-
-                echo "✅ Production approved by: ${env.APPROVED_BY}"
-            }
-        }
-
         stage('Build') {
             steps {
                 sh '''
@@ -71,7 +52,14 @@ pipeline {
                 expression { env.BRANCH_NAME == 'main' }
             }
             steps {
-                echo "🚀 Deploying PRODUCTION"
+                input(
+                    message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
+                    ok: "Approve & Deploy",
+                    submitter: "admin,qa",
+                    submitterParameter: "APPROVED_BY"
+                )
+
+                echo "🚀 Deploying PRODUCTION (Approved by: ${env.APPROVED_BY})"
                 sh '''
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
