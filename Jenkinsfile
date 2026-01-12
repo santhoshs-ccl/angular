@@ -56,7 +56,8 @@ pipeline {
                 input(
                     message: "⚠️ Approve PRODUCTION deployment from MAIN branch?",
                     ok: "Approve & Deploy"
-                    // submitter: "admin,qa" // uncomment after confirming Jenkins user IDs
+                    submitter: "admin,qa" // uncomment after confirming Jenkins user IDs
+		    submitterParameter: "APPROVED_BY"
                 )
 
                 echo "🚀 Deploying PRODUCTION"
