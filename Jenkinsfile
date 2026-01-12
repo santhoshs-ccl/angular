@@ -59,7 +59,7 @@ pipeline {
                     submitterParameter: "APPROVED_BY"
                 )
 
-                echo "🚀 Deploying PRODUCTION (Approved by: ${APPROVED_BY})"
+                echo "🚀 Deploying PRODUCTION (Approved by: ${env.APPROVED_BY})"
                 sh '''
                 mkdir -p deploy/prod
                 cp -r dist/* deploy/prod/
